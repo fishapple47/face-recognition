@@ -79,7 +79,9 @@
     <video id="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
   </div>
-  <canvas id="record_canvas" width="720" height="1280"></canvas>
+  
+  <canvas id="record_canvas" width="1080" height="1920"></canvas>
+  
   <div id="instruction" class="instruction-box">カメラを起動中...</div>
   <button id="retry-btn">やり直す</button>
 
@@ -118,12 +120,20 @@
       if (isRecording) return;
       isRecording = true;
       recordedChunks = [];
-      recordCanvas.width = 720;
-      recordCanvas.height = 1280;
+      
+      // ★ 修正ポイント: 録画用キャンバスのサイズをここで再度「縦長FHD」に明示 ★
+      recordCanvas.width = 1080;
+      recordCanvas.height = 1920;
+      
       const stream = recordCanvas.captureStream(30); 
       const types = ['video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
       let selectedType = types.find(type => MediaRecorder.isTypeSupported(type));
-      mediaRecorder = new MediaRecorder(stream, { mimeType: selectedType, videoBitsPerSecond: 2500000 });
+      
+      // ★ 修正ポイント: ビットレートを 6Mbps に引き上げて高画質を維持 ★
+      mediaRecorder = new MediaRecorder(stream, { 
+        mimeType: selectedType, 
+        videoBitsPerSecond: 6000000 // 6Mbps（画質とファイルサイズのバランス）
+      });
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
       mediaRecorder.onstop = async () => {
         if (recordedChunks.length === 0) return;
@@ -139,7 +149,9 @@
       canvasElement.width = videoElement.videoWidth; 
       canvasElement.height = videoElement.videoHeight;
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-      const targetW = 720; const targetH = 1280;
+      
+      // ★ 修正ポイント: 描画計算の基準を 1080x1920 に引き上げ ★
+      const targetW = 1080; const targetH = 1920;
       recordCtx.clearRect(0, 0, targetW, targetH);
       const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
       const targetAspect = targetW / targetH;
@@ -192,9 +204,12 @@
       const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
       faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5 });
       faceMesh.onResults(onResults);
+      
+      // ★ 修正ポイント: カメラを 1080p (FHD) モードで起動要請 ★
       const camera = new Camera(videoElement, {
         onFrame: async () => { await faceMesh.send({image: videoElement}); },
-        facingMode: 'user', width: 1280, height: 720
+        facingMode: 'user', 
+        width: 1920, height: 1080 // カメラは標準設定でFHD起動
       });
       camera.start();
       instructionText.innerText = "枠内に顔を収めてください";
