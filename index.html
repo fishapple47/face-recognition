@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>次世代AI 高精度顔認証システム</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background-color: #1a1a1a;
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      overflow: hidden;
+    }
+    .container {
+      position: relative;
+      width: 90%;
+      max-width: 600px;
+      aspect-ratio: 4/3;
+      background: #000;
+      border: 4px solid #333;
+      border-radius: 20px;
+      overflow: hidden;
+      box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+    }
+    video, canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1); /* 鏡のように反転 */
+    }
+    .ui-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      pointer-events: none;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    .instruction-box {
+      background: rgba(0, 0, 0, 0.7);
+      padding: 15px 20px;
+      border-radius: 10px;
+      text-align: center;
+      font-size: 1.2rem;
+      font-weight: bold;
+      border: 1px solid #0ff;
+      color: #0ff;
+      text-shadow: 0 0 5px #0ff;
+    }
+    .status {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #ff4444;
+      animation: blink 1s infinite;
+    }
+    @keyframes blink { 50% { opacity: 0; } }
+  </style>
+</head>
+<body>
+
+  <h2>厳格な本人確認を実行中...</h2>
+  
+  <div class="container">
+    <video id="input_video" autoplay playsinline></video>
+    <canvas id="output_canvas"></canvas>
+    
+    <div class="ui-overlay">
+      <div class="status">● REC (監視中)</div>
+      <div id="instruction" class="instruction-box">カメラを許可して正面を向いてください</div>
+    </div>
+  </div>
+
+  <script>
+    const videoElement = document.getElementById('input_video');
+    const canvasElement = document.getElementById('output_canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+    const instructionText = document.getElementById('instruction');
+
+    let isRecording = false;
+    let mediaRecorder;
+    let recordedChunks = [];
+    let currentStep = 0; // 0:正面, 1:口を開ける, 2:右を向く, 3:完了
+
+    // 録画開始の処理
+    function startRecording() {
+      if (isRecording) return;
+      const stream = videoElement.srcObject;
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = saveVideoMock;
+      mediaRecorder.start();
+      isRecording = true;
+    }
+
+    // 録画終了と保存（今は自動ダウンロードするモック仕様）
+    function saveVideoMock() {
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'funny_auth_video.webm';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // 顔検知のメイン処理
+    function onResults(results) {
+      // キャンバスのサイズをビデオに合わせる
+      canvasElement.width = videoElement.videoWidth;
+      canvasElement.height = videoElement.videoHeight;
+      canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+        if (!isRecording) startRecording(); // 顔が映ったらこっそり録画開始
+
+        const landmarks = results.multiFaceLandmarks[0];
+        
+        // 認証ステップのロジック
+        if (currentStep === 0) {
+          instructionText.innerText = "大きく口を開けてください";
+          
+          // 上唇(13)と下唇(14)の距離を計算（簡易的な口の開閉検知）
+          const upperLip = landmarks[13];
+          const lowerLip = landmarks[14];
+          const mouthOpenDist = Math.abs(upperLip.y - lowerLip.y);
+          
+          if (mouthOpenDist > 0.05) { // 閾値（環境によって調整が必要）
+            currentStep = 1;
+            instructionText.style.borderColor = "#0f0";
+            instructionText.style.color = "#0f0";
+            setTimeout(() => {
+              instructionText.style.borderColor = "#0ff";
+              instructionText.style.color = "#0ff";
+              currentStep = 2;
+            }, 1000);
+          }
+        } else if (currentStep === 2) {
+          instructionText.innerText = "顔を右に向けてください";
+          
+          // 鼻の頭(1)と両耳(234, 454)の位置関係で横を向いたか判定
+          const nose = landmarks[1];
+          const rightCheek = landmarks[234];
+          const leftCheek = landmarks[454];
+          
+          // 簡易的な向き判定（鼻が顔の左側に寄ったら右を向いているとみなす※鏡写しのため）
+          if (nose.x < leftCheek.x - 0.1) { 
+            currentStep = 3;
+            instructionText.innerText = "認証失敗！顔がふざけすぎています"; // ここがオチ
+            instructionText.style.borderColor = "#f00";
+            instructionText.style.color = "#f00";
+            
+            setTimeout(() => {
+              if(mediaRecorder.state !== "inactive") mediaRecorder.stop(); // 録画停止してダウンロード
+            }, 2000);
+          }
+        }
+
+        // SFっぽい顔のメッシュ（網目）を描画する（不要なら消せます）
+        canvasCtx.fillStyle = 'rgba(0, 255, 255, 0.5)';
+        for (let i = 0; i < landmarks.length; i++) {
+          const x = landmarks[i].x * canvasElement.width;
+          const y = landmarks[i].y * canvasElement.height;
+          canvasCtx.beginPath();
+          canvasCtx.arc(x, y, 1, 0, 2 * Math.PI);
+          canvasCtx.fill();
+        }
+      } else {
+        instructionText.innerText = "顔が認識できません。枠内に入ってください。";
+      }
+    }
+
+    // MediaPipe FaceMeshの初期設定
+    const faceMesh = new FaceMesh({locateFile: (file) => {
+      return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+    }});
+    faceMesh.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+    faceMesh.onResults(onResults);
+
+    // カメラの起動
+    const camera = new Camera(videoElement, {
+      onFrame: async () => {
+        await faceMesh.send({image: videoElement});
+      },
+      width: 640,
+      height: 480
+    });
+    camera.start();
+  </script>
+</body>
+</html>
