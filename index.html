@@ -159,7 +159,7 @@
         if (currentStep === 0) {
           instructionText.innerText = "口をゆっくり大きく開けてください";
           const mouthOpenDist = Math.abs(landmarks[13].y - landmarks[14].y);
-          if (mouthOpenDist > 0.05) { // 0.07から0.05へ緩和
+          if (mouthOpenDist > 0.1) { // 0.07から0.05へ緩和
             if (!actionStartTime) actionStartTime = Date.now();
             let remaining = Math.ceil((2000 - (Date.now() - actionStartTime)) / 1000); // 3秒から2秒へ短縮
             if (remaining > 0) { instructionText.innerText = `そのままキープ...\n(${remaining})`; }
@@ -169,7 +169,7 @@
         // --- ステップ1: まばたき (緩和版) ---
         else if (currentStep === 1) {
           const leftEye = Math.abs(landmarks[159].y - landmarks[145].y);
-          if (leftEye < 0.018) { blinkState = "closed"; } // 0.015から0.018へ緩和
+          if (leftEye < 0.03) { blinkState = "closed"; } // 0.015から0.018へ緩和
           else if (blinkState === "closed" && leftEye > 0.022) { 
             setTimeout(() => {
                 currentStep = 2; 
