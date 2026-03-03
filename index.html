@@ -166,15 +166,22 @@
             else { currentStep = 1; actionStartTime = null; instructionText.innerText = "OK！次にゆっくりまばたきしてください"; }
           } else { actionStartTime = null; }
         } 
-        // --- ステップ1: まばたき (緩和版) ---
+// --- ステップ1: まばたき (超・激甘設定) ---
         else if (currentStep === 1) {
           const leftEye = Math.abs(landmarks[159].y - landmarks[145].y);
-          if (leftEye < 0.025) { blinkState = "closed"; } // 0.015から0.018へ緩和
-          else if (blinkState === "closed" && leftEye > 0.03) { 
+          const rightEye = Math.abs(landmarks[386].y - landmarks[374].y);
+          
+          // 数値を 0.025 → 0.035 に引き上げ (半目でも「閉じた」とみなす)
+          // 片目でも反応するように設定を緩和
+          if (leftEye < 0.035 || rightEye < 0.035) { 
+            blinkState = "closed"; 
+          } 
+          // 一度「閉じた」と判定された後、少しでも目が開けば合格
+          else if (blinkState === "closed" && (leftEye > 0.038 || rightEye > 0.038)) { 
             setTimeout(() => {
                 currentStep = 2; 
                 instructionText.innerText = "OK！ゆっくり右を向いてください"; 
-            }, 500);
+            }, 300);
           }
         } 
         // --- ステップ2: 右向き ---
