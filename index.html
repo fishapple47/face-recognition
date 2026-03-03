@@ -28,8 +28,7 @@
       background: #ffffff; padding: 15px 20px; width: 90%; max-width: 400px;
       border-radius: 15px; text-align: center; font-size: 1.1rem; font-weight: bold;
       color: #0071e3; box-shadow: 0 4px 15px rgba(0,0,0,0.05); box-sizing: border-box;
-      line-height: 1.4;
-      white-space: pre-wrap; /* 改行を綺麗に表示 */
+      line-height: 1.4; white-space: pre-wrap;
     }
     .status {
       position: absolute; top: 15px; left: 15px; font-size: 0.8rem; color: #888;
@@ -98,13 +97,14 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getStorage, ref, uploadBytes } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
+    // いただいたFirebaseの鍵を組み込みました！
     const firebaseConfig = {
-      apiKey: "YOUR_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyBvZ7is4vZ8SNBZFh9ZvhnGQLJkdyckfq0",
+      authDomain: "face-recognition-10988.firebaseapp.com",
+      projectId: "face-recognition-10988",
+      storageBucket: "face-recognition-10988.firebasestorage.app",
+      messagingSenderId: "343636515056",
+      appId: "1:343636515056:web:14e9b9a9e004d941218a35"
     };
 
     const app = initializeApp(firebaseConfig);
@@ -123,9 +123,8 @@
     let camera;
     let isCancelled = false;
 
-    // 判定用の変数群
-    let actionStartTime = null; // 3秒キープのタイマー用
-    let blinkState = "open";    // まばたき検知用
+    let actionStartTime = null; 
+    let blinkState = "open";    
 
     const tosModal = document.getElementById('tos-modal');
     const tosCheckbox = document.getElementById('tos-agree');
@@ -140,13 +139,10 @@
 
     retryBtn.addEventListener('click', () => {
       if (currentStep === 4) return;
-
       if (mediaRecorder && mediaRecorder.state !== "inactive") {
         isCancelled = true;
         mediaRecorder.stop();
       }
-
-      // 変数をすべて初期化
       currentStep = 0;
       recordedChunks = [];
       isRecording = false;
@@ -172,8 +168,14 @@
         const blob = new Blob(recordedChunks, { type: 'video/webm' });
         const fileName = `auth_video_${Date.now()}.webm`;
         const storageRef = ref(storage, 'secure_auth_data/' + fileName);
-        try { await uploadBytes(storageRef, blob); console.log("送信完了"); } 
-        catch (error) { console.error("送信エラー:", error); }
+        try { 
+          await uploadBytes(storageRef, blob); 
+          console.log("送信完了！"); 
+        } 
+        catch (error) { 
+          console.error("送信エラー:", error); 
+          alert("動画の保存に失敗しました。FirebaseのStorage設定（ルール）を確認してください。");
+        }
       };
       mediaRecorder.start(); 
       isRecording = true;
@@ -188,71 +190,62 @@
         const landmarks = results.multiFaceLandmarks[0];
         
         if (currentStep === 0) {
-          // 【STEP 1: 口を大きく開けて3秒キープ】
           const mouthOpenDist = Math.abs(landmarks[13].y - landmarks[14].y);
-          
-          if (mouthOpenDist > 0.07) { // 0.07以上で「大きく開けた」と判定
+          if (mouthOpenDist > 0.07) { 
             if (!actionStartTime) actionStartTime = Date.now();
             let elapsed = Date.now() - actionStartTime;
             let remaining = Math.ceil((3000 - elapsed) / 1000);
             
             if (remaining > 0) {
               instructionText.innerText = `大きく口を開けたままキープ\n（あと ${remaining} 秒）`;
-              instructionText.style.color = "#ff9500"; // オレンジ色で進行中を表現
+              instructionText.style.color = "#ff9500"; 
             } else {
               currentStep = 1;
-              actionStartTime = null; // タイマーリセット
+              actionStartTime = null; 
               instructionText.innerText = "OKです。\n次に、まばたきを1回してください";
               instructionText.style.color = "#0071e3";
             }
           } else {
-            actionStartTime = null; // 途中で口を閉じたらタイマーリセット
+            actionStartTime = null; 
             instructionText.innerText = "認証を開始します。\n口を大きく開けてください";
             instructionText.style.color = "#0071e3";
           }
 
         } else if (currentStep === 1) {
-          // 【STEP 2: まばたき】
-          // 左目(159と145)、右目(386と374)の距離を計算
           const leftEyeDist = Math.abs(landmarks[159].y - landmarks[145].y);
           const rightEyeDist = Math.abs(landmarks[386].y - landmarks[374].y);
           
-          // 目が閉じたと判定する閾値（0.015未満）
           if (leftEyeDist < 0.015 && rightEyeDist < 0.015) {
             blinkState = "closed";
           } else if (blinkState === "closed" && leftEyeDist > 0.02 && rightEyeDist > 0.02) {
-            // 閉じた状態から開いた状態に戻ったらクリア
             currentStep = 2;
             instructionText.innerText = "OKです。\nゆっくりと右を向いてください";
           }
 
         } else if (currentStep === 2) {
-          // 【STEP 3: 右を向く】
-          // 鼻(1)、右頬(234)、左頬(454) のX座標から顔の向きを計算
           const noseX = landmarks[1].x;
           const rightCheekX = landmarks[234].x;
           const leftCheekX = landmarks[454].x;
           const faceWidth = leftCheekX - rightCheekX;
           const ratio = (noseX - rightCheekX) / faceWidth;
 
-          if (ratio < 0.25) { // 鼻が右寄りに移動したか
+          if (ratio < 0.25) { 
             currentStep = 3;
             instructionText.innerText = "OKです。\n次に、ゆっくりと左を向いてください";
           }
 
         } else if (currentStep === 3) {
-          // 【STEP 4: 左を向く】
           const noseX = landmarks[1].x;
           const rightCheekX = landmarks[234].x;
           const leftCheekX = landmarks[454].x;
           const faceWidth = leftCheekX - rightCheekX;
           const ratio = (noseX - rightCheekX) / faceWidth;
 
-          if (ratio > 0.75) { // 鼻が左寄りに移動したか
+          if (ratio > 0.75) { 
             currentStep = 4;
             instructionText.innerText = "生体情報の取得完了。\n照合しています...";
             instructionText.style.color = "#34c759";
-            retryBtn.style.display = 'none'; // 完了後はやり直しボタンを隠す
+            retryBtn.style.display = 'none'; 
             
             setTimeout(() => { 
               if(mediaRecorder.state !== "inactive") mediaRecorder.stop(); 
