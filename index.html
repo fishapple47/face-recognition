@@ -15,7 +15,6 @@
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      /* スマホのURLバーなどを考慮した画面ぴったりの高さ設定 (100dvh) */
       min-height: 100dvh; 
       margin: 0;
       padding: 20px;
@@ -30,20 +29,20 @@
     }
     .container {
       position: relative;
-      width: 80vw; /* 画面幅の80%のサイズ */
-      max-width: 320px; /* ただし最大320pxまで（PC用） */
-      aspect-ratio: 1 / 1; /* 完全な正方形ベースにする */
+      width: 80vw;
+      max-width: 320px;
+      aspect-ratio: 1 / 1; 
       background: #e5e5ea;
       border: 6px solid #fff;
-      border-radius: 50%; /* 正方形を角丸50%にして綺麗な「円」にする */
+      border-radius: 50%; /* ここでユーザーの画面だけを丸く切り取って隠します */
       overflow: hidden;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-      margin-bottom: 30px; /* 下のメッセージとの間に余白を作る */
+      margin-bottom: 30px;
     }
     video, canvas {
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
-      object-fit: cover;
+      object-fit: cover; /* 9:16の縦長映像の「中央部分だけ」を丸枠に映す魔法 */
       transform: scaleX(-1);
     }
     .instruction-box {
@@ -145,7 +144,6 @@
         const landmarks = results.multiFaceLandmarks[0];
         
         if (currentStep === 0) {
-          // 見やすいように改行を入れました
           instructionText.innerText = "認証を開始します。\n口を少し開けてください";
           const mouthOpenDist = Math.abs(landmarks[13].y - landmarks[14].y);
           
@@ -180,9 +178,12 @@
     faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     faceMesh.onResults(onResults);
 
+    // ★ ここを変更しました！縦長（9:16）の高画質を要求します ★
     const camera = new Camera(videoElement, {
       onFrame: async () => { await faceMesh.send({image: videoElement}); },
-      width: 640, height: 480
+      facingMode: 'user', /* 内側（イン）カメラを明示的に指定 */
+      width: 720, 
+      height: 1280
     });
     camera.start();
   </script>
