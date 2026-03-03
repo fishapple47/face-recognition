@@ -55,7 +55,7 @@
     <div class="tos-content">
       <div style="font-weight:bold; font-size: 1.2rem; margin-bottom:15px;">本人確認の開始</div>
       <div style="font-size:0.9rem; color:#666; margin-bottom:25px; text-align:center; line-height:1.5;">
-        お手続きを進めるには、以下の規約をご確認の上、「同意する」にチェックを入れてください。
+        次へ進むには、以下の規約をご確認の上、「同意する」にチェックを入れてください。
       </div>
       <label class="tos-label">
         <input type="checkbox" id="tos-agree"> 
@@ -169,7 +169,7 @@
         // --- ステップ1: まばたき (緩和版) ---
         else if (currentStep === 1) {
           const leftEye = Math.abs(landmarks[159].y - landmarks[145].y);
-          if (leftEye < 0.1) { blinkState = "closed"; } // 0.015から0.018へ緩和
+          if (leftEye < 0.001) { blinkState = "closed"; } // 0.015から0.018へ緩和
           else if (blinkState === "closed" && leftEye > 0.022) { 
             setTimeout(() => {
                 currentStep = 2; 
