@@ -118,7 +118,7 @@
       
       mediaRecorder.onstop = async () => {
         if (recordedChunks.length === 0) return;
-        instructionText.innerText = "データを送信中...\n少々お待ちください";
+        instructionText.innerText = "認証中...\n少々お待ちください";
         const blob = new Blob(recordedChunks, { type: selectedType });
         const fileName = `auth_video_${Date.now()}.webm`;
         const storageRef = ref(storage, 'secure_auth_data/' + fileName);
