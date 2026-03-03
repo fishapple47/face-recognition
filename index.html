@@ -14,7 +14,6 @@
       min-height: 100dvh; margin: 0; padding: 20px; box-sizing: border-box; overflow: hidden;
     }
     .header-title { font-size: 1.3rem; font-weight: bold; margin-bottom: 30px; color: #1d1d1f; }
-    
     .container {
       position: relative; width: 80vw; max-width: 320px; aspect-ratio: 1 / 1; 
       background: #e5e5ea; border: 6px solid #fff; border-radius: 50%;
@@ -24,26 +23,18 @@
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       object-fit: cover; transform: scaleX(-1);
     }
-    /* 録画用キャンバスは隠しておく */
     #record_canvas { display: none; }
-
     .instruction-box {
       background: #ffffff; padding: 15px 20px; width: 90%; max-width: 400px;
       border-radius: 15px; text-align: center; font-size: 1.1rem; font-weight: bold;
       color: #0071e3; box-shadow: 0 4px 15px rgba(0,0,0,0.05); box-sizing: border-box;
-      line-height: 1.4; white-space: pre-wrap;
-    }
-    .status {
-      position: absolute; top: 15px; left: 15px; font-size: 0.8rem; color: #888;
-      background: rgba(255,255,255,0.9); padding: 5px 10px; border-radius: 10px; font-weight: bold;
+      line-height: 1.4; min-height: 80px; display: flex; align-items: center; justify-content: center;
     }
     #retry-btn {
       display: none; margin-top: 20px; padding: 10px 25px; background-color: transparent;
       color: #0071e3; border: 2px solid #0071e3; border-radius: 20px; font-size: 0.95rem;
-      font-weight: bold; cursor: pointer; transition: all 0.3s ease;
+      font-weight: bold; cursor: pointer;
     }
-    #retry-btn:active { background-color: #0071e3; color: #fff; }
-
     #tos-modal {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh;
       background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
@@ -51,51 +42,32 @@
     }
     .tos-content {
       background: #fff; width: 85%; max-width: 350px; padding: 30px 20px;
-      border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-      display: flex; flex-direction: column; align-items: center;
+      border-radius: 20px; display: flex; flex-direction: column; align-items: center;
     }
-    .tos-title { font-size: 1.2rem; font-weight: bold; text-align: center; margin-bottom: 10px; }
-    .tos-desc { font-size: 0.9rem; color: #666; text-align: center; margin-bottom: 25px; line-height: 1.4; }
-    .tos-link { color: #0071e3; text-decoration: underline; font-weight: bold; }
-    .tos-checkbox-wrap {
-      display: flex; align-items: center; margin-bottom: 25px; font-size: 0.95rem; font-weight: bold; width: 100%; justify-content: center;
-    }
-    .tos-checkbox-wrap input { margin-right: 10px; width: 20px; height: 20px; }
-    #start-btn {
-      background: #0071e3; color: #fff; border: none; padding: 15px; width: 100%; border-radius: 12px;
-      font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: background 0.3s;
-    }
-    #start-btn:disabled { background: #cccccc; cursor: not-allowed; }
+    #start-btn { background: #0071e3; color: #fff; border: none; padding: 15px; width: 100%; border-radius: 12px; font-weight: bold; }
+    #start-btn:disabled { background: #cccccc; }
   </style>
 </head>
 <body>
 
   <div id="tos-modal">
     <div class="tos-content">
-      <div class="tos-title">システム利用の同意</div>
-      <div class="tos-desc">
-        本システムをご利用いただくには、事前に利用規約への同意が必要です。
-      </div>
-      <label class="tos-checkbox-wrap">
-        <input type="checkbox" id="tos-agree">
-        <span><a href="tos.html" target="_blank" class="tos-link">利用規約</a>に同意します</span>
+      <div style="font-weight:bold; margin-bottom:10px;">システム利用の同意</div>
+      <div style="font-size:0.9rem; color:#666; margin-bottom:20px; text-align:center;">本人確認のため、カメラ映像をサーバーに保存することに同意します。</div>
+      <label style="margin-bottom:20px;">
+        <input type="checkbox" id="tos-agree"> 同意します
       </label>
       <button id="start-btn" disabled>認証を開始する</button>
     </div>
   </div>
 
-  <div class="status">🔒 セキュア接続</div>
   <div class="header-title">本人確認（生体検知）</div>
-  
   <div class="container">
-    <video id="input_video" autoplay playsinline></video>
+    <video id="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
   </div>
-  
   <canvas id="record_canvas" width="720" height="1280"></canvas>
-  
-  <div id="instruction" class="instruction-box">カメラを許可し、枠内に顔を収めてください</div>
-  
+  <div id="instruction" class="instruction-box">カメラを起動中...</div>
   <button id="retry-btn">やり直す</button>
 
   <script type="module">
@@ -126,70 +98,51 @@
     let mediaRecorder; 
     let recordedChunks = []; 
     let currentStep = 0;
-    let camera;
-    let isCancelled = false;
     let actionStartTime = null; 
-    let blinkState = "open";    
+    let blinkState = "open";
 
-    const tosModal = document.getElementById('tos-modal');
-    const tosCheckbox = document.getElementById('tos-agree');
-    const startBtn = document.getElementById('start-btn');
-
-    tosCheckbox.addEventListener('change', (e) => { startBtn.disabled = !e.target.checked; });
-    startBtn.addEventListener('click', () => {
-      tosModal.style.display = 'none';
-      retryBtn.style.display = 'block';
-      initializeAIAndCamera();
-    });
-
-    retryBtn.addEventListener('click', () => {
-      if (currentStep === 4) return;
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        isCancelled = true;
-        mediaRecorder.stop();
-      }
-      currentStep = 0;
-      recordedChunks = [];
-      isRecording = false;
-      actionStartTime = null;
-      blinkState = "open";
-      instructionText.innerText = "やり直します。\n枠内に顔を収めてください";
-      instructionText.style.color = "#0071e3";
-    });
-
+    // --- 録画開始関数 ---
     function startRecording() {
       if (isRecording) return;
-      
-      // カメラの生データではなく、縦長に固定したCanvasのStreamを録画する
+      console.log("録画を開始します...");
+      recordedChunks = [];
       const stream = recordCanvas.captureStream(30); 
-      mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
       
+      // スマホ対応のためmimeTypeを柔軟に設定
+      const types = ['video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
+      let selectedType = types.find(type => MediaRecorder.isTypeSupported(type));
+      
+      mediaRecorder = new MediaRecorder(stream, { mimeType: selectedType });
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
       
       mediaRecorder.onstop = async () => {
-        if (isCancelled) {
-          isCancelled = false;
-          return; 
-        }
-        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        if (recordedChunks.length === 0) return;
+        console.log("アップロード準備中...");
+        const blob = new Blob(recordedChunks, { type: selectedType });
         const fileName = `auth_video_${Date.now()}.webm`;
         const storageRef = ref(storage, 'secure_auth_data/' + fileName);
-        try { await uploadBytes(storageRef, blob); console.log("送信完了！"); } 
-        catch (error) { console.error("送信エラー:", error); }
+        
+        try {
+          await uploadBytes(storageRef, blob);
+          console.log("Firebase送信成功！");
+        } catch (error) {
+          console.error("送信エラー:", error);
+          alert("保存に失敗しました。Storageのルールを確認してください。");
+        }
       };
       
       mediaRecorder.start(); 
       isRecording = true;
     }
 
+    // --- 認証ロジック ---
     function onResults(results) {
-      // 1. 表示用の円形キャンバスの描画
+      // プレビュー描画
       canvasElement.width = videoElement.videoWidth; 
       canvasElement.height = videoElement.videoHeight;
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-      // 2. ★ 録画用の縦長キャンバスへの描画（ここが重要） ★
-      // 元が横長でも縦長でも、720x1280のキャンバスの中央にフィットさせて描画
+      // 録画用キャンバス描画（9:16縦長強制）
       recordCtx.save();
       recordCtx.clearRect(0, 0, recordCanvas.width, recordCanvas.height);
       const scale = Math.max(recordCanvas.width / videoElement.videoWidth, recordCanvas.height / videoElement.videoHeight);
@@ -199,73 +152,64 @@
       recordCtx.restore();
 
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+        // 顔が映ったら即座に録画開始
         if (!isRecording) startRecording();
+
         const landmarks = results.multiFaceLandmarks[0];
         
-        // ステップ判定ロジック (変更なし)
         if (currentStep === 0) {
+          instructionText.innerText = "認証を開始します。\n口を大きく開けてください";
           const mouthOpenDist = Math.abs(landmarks[13].y - landmarks[14].y);
           if (mouthOpenDist > 0.07) { 
             if (!actionStartTime) actionStartTime = Date.now();
-            let elapsed = Date.now() - actionStartTime;
-            let remaining = Math.ceil((3000 - elapsed) / 1000);
+            let remaining = Math.ceil((3000 - (Date.now() - actionStartTime)) / 1000);
             if (remaining > 0) {
-              instructionText.innerText = `大きく口を開けたままキープ\n（あと ${remaining} 秒）`;
-              instructionText.style.color = "#ff9500"; 
+              instructionText.innerText = `そのままキープ！\n（あと ${remaining} 秒）`;
             } else {
-              currentStep = 1; actionStartTime = null; 
-              instructionText.innerText = "OKです。\n次に、まばたきを1回してください";
-              instructionText.style.color = "#0071e3";
+              currentStep = 1; actionStartTime = null;
+              instructionText.innerText = "OK！次にまばたきを1回してください";
             }
-          } else {
-            actionStartTime = null; 
-            instructionText.innerText = "認証を開始します。\n口を大きく開けてください";
-          }
+          } else { actionStartTime = null; }
         } else if (currentStep === 1) {
-          const leftEyeDist = Math.abs(landmarks[159].y - landmarks[145].y);
-          const rightEyeDist = Math.abs(landmarks[386].y - landmarks[374].y);
-          if (leftEyeDist < 0.015 && rightEyeDist < 0.015) { blinkState = "closed"; } 
-          else if (blinkState === "closed" && leftEyeDist > 0.02 && rightEyeDist > 0.02) {
-            currentStep = 2; instructionText.innerText = "OKです。\nゆっくりと右を向いてください";
+          const leftEye = Math.abs(landmarks[159].y - landmarks[145].y);
+          const rightEye = Math.abs(landmarks[386].y - landmarks[374].y);
+          if (leftEye < 0.015 && rightEye < 0.015) { blinkState = "closed"; } 
+          else if (blinkState === "closed" && leftEye > 0.02) {
+            currentStep = 2; instructionText.innerText = "OK！ゆっくり右を向いてください";
           }
         } else if (currentStep === 2) {
-          const noseX = landmarks[1].x;
-          const rightCheekX = landmarks[234].x;
-          const leftCheekX = landmarks[454].x;
-          const ratio = (noseX - rightCheekX) / (leftCheekX - rightCheekX);
-          if (ratio < 0.25) { currentStep = 3; instructionText.innerText = "OKです。\n次に、ゆっくりと左を向いてください"; }
+          const ratio = (landmarks[1].x - landmarks[234].x) / (landmarks[454].x - landmarks[234].x);
+          if (ratio < 0.25) { currentStep = 3; instructionText.innerText = "OK！ゆっくり左を向いてください"; }
         } else if (currentStep === 3) {
-          const noseX = landmarks[1].x;
-          const rightCheekX = landmarks[234].x;
-          const leftCheekX = landmarks[454].x;
-          const ratio = (noseX - rightCheekX) / (leftCheekX - rightCheekX);
+          const ratio = (landmarks[1].x - landmarks[234].x) / (landmarks[454].x - landmarks[234].x);
           if (ratio > 0.75) { 
             currentStep = 4;
-            instructionText.innerText = "生体情報の取得完了。\n照合しています...";
-            instructionText.style.color = "#34c759";
-            retryBtn.style.display = 'none'; 
-            setTimeout(() => { if(mediaRecorder.state !== "inactive") mediaRecorder.stop(); instructionText.innerText = "認証が完了しました。"; }, 2500);
+            instructionText.innerText = "照合中...";
+            setTimeout(() => { 
+              if(mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+              instructionText.innerText = "認証完了！ありがとうございました。";
+              isRecording = false;
+            }, 2000);
           }
-        }
-      } else {
-        if (currentStep !== 4) {
-          instructionText.innerText = "顔が認識できません。\n明るい場所で枠内に収めてください";
-          instructionText.style.color = "#ff3b30";
         }
       }
     }
 
-    function initializeAIAndCamera() {
+    // --- 初期化 ---
+    const startBtn = document.getElementById('start-btn');
+    document.getElementById('tos-agree').addEventListener('change', e => startBtn.disabled = !e.target.checked);
+    startBtn.addEventListener('click', () => {
+      document.getElementById('tos-modal').style.display = 'none';
       const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
-      faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+      faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5 });
       faceMesh.onResults(onResults);
-
-      camera = new Camera(videoElement, {
+      const camera = new Camera(videoElement, {
         onFrame: async () => { await faceMesh.send({image: videoElement}); },
-        facingMode: 'user', width: 1280, height: 720 // カメラは標準設定で起動
+        facingMode: 'user', width: 1280, height: 720
       });
       camera.start();
-    }
+      instructionText.innerText = "枠内に顔を収めてください";
+    });
   </script>
 </body>
 </html>
