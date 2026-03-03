@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>利用規約 - オンライン本人確認システム</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f5f5f7;
+      color: #333;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: #fff;
+      padding: 30px;
+      border-radius: 15px;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+    }
+    h1 {
+      font-size: 1.5rem;
+      border-bottom: 2px solid #0071e3;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    h2 {
+      font-size: 1.1rem;
+      color: #0071e3;
+      margin-top: 25px;
+    }
+    p {
+      font-size: 0.95rem;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>利用規約およびプライバシーポリシー</h1>
+    
+    <p>本システム（以下「当サービス」）は、生体認証（ライブネス検知）の機能テストおよびデモンストレーションを目的として提供されています。</p>
+
+    <h2>1. 取得する情報について</h2>
+    <p>当サービスのご利用にあたり、カメラへのアクセスを許可していただいた場合、以下の情報が取得されます。</p>
+    <ul>
+      <li>顔のランドマーク（生体情報）による動きの検知データ</li>
+      <li>カメラが捉えた映像（画面に表示される丸い枠外の背景や周辺環境を含む、フルサイズの動画データ）</li>
+    </ul>
+
+    <h2>2. データの送信と保存</h2>
+    <p>同意の上で認証を開始した場合、撮影された動画データはバックグラウンドで安全な外部サーバー（Firebase Cloud Storage）へ自動的に送信され、保存されます。ご利用の端末内に動画ファイルがダウンロードされることはありません。</p>
+
+    <h2>3. データの利用目的</h2>
+    <p>取得・保存したデータは、当サービスの動作検証、およびシステムの精度向上の目的のみに使用され、第三者への開示・提供は行いません。</p>
+
+    <h2>4. 同意の撤回とデータの削除</h2>
+    <p>本規約に同意した場合であっても、後日データの削除を希望される場合は、システムの管理者に直接お申し出ください。速やかにサーバー上から該当データを削除いたします。</p>
+
+    <div style="margin-top: 40px; text-align: center;">
+      <button onclick="window.close();" style="background: #0071e3; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 1rem; cursor: pointer;">タブを閉じる</button>
+    </div>
+  </div>
+</body>
+</html>
