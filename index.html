@@ -14,6 +14,7 @@
       min-height: 100dvh; margin: 0; padding: 20px; box-sizing: border-box; overflow: hidden;
     }
     .header-title { font-size: 1.3rem; font-weight: bold; margin-bottom: 30px; color: #1d1d1f; }
+    
     .container {
       position: relative; width: 80vw; max-width: 320px; aspect-ratio: 1 / 1; 
       background: #e5e5ea; border: 6px solid #fff; border-radius: 50%;
@@ -24,11 +25,12 @@
       object-fit: cover; transform: scaleX(-1);
     }
     #record_canvas { display: none; }
+
     .instruction-box {
       background: #ffffff; padding: 15px 20px; width: 90%; max-width: 400px;
       border-radius: 15px; text-align: center; font-size: 1.1rem; font-weight: bold;
       color: #0071e3; box-shadow: 0 4px 15px rgba(0,0,0,0.05); box-sizing: border-box;
-      line-height: 1.4; min-height: 80px; display: flex; align-items: center; justify-content: center;
+      line-height: 1.4; white-space: pre-wrap;
     }
     #retry-btn {
       display: none; margin-top: 20px; padding: 10px 25px; background-color: transparent;
@@ -44,7 +46,7 @@
       background: #fff; width: 85%; max-width: 350px; padding: 30px 20px;
       border-radius: 20px; display: flex; flex-direction: column; align-items: center;
     }
-    #start-btn { background: #0071e3; color: #fff; border: none; padding: 15px; width: 100%; border-radius: 12px; font-weight: bold; }
+    #start-btn { background: #0071e3; color: #fff; border: none; padding: 15px; width: 100%; border-radius: 12px; font-weight: bold; cursor: pointer; }
     #start-btn:disabled { background: #cccccc; }
   </style>
 </head>
@@ -62,12 +64,15 @@
   </div>
 
   <div class="header-title">本人確認（生体検知）</div>
+  
   <div class="container">
     <video id="input_video" autoplay playsinline muted></video>
     <canvas id="output_canvas"></canvas>
   </div>
+  
   <canvas id="record_canvas" width="720" height="1280"></canvas>
-  <div id="instruction" class="instruction-box">カメラを起動中...</div>
+  
+  <div id="instruction" class="instruction-box">カメラを許可し、枠内に顔を収めてください</div>
   <button id="retry-btn">やり直す</button>
 
   <script type="module">
@@ -101,93 +106,78 @@
     let actionStartTime = null; 
     let blinkState = "open";
 
-    // --- 録画開始関数 ---
+    // --- 修正：録画開始関数 ---
     function startRecording() {
       if (isRecording) return;
-      console.log("録画を開始します...");
+      isRecording = true;
       recordedChunks = [];
-      const stream = recordCanvas.captureStream(30); 
       
-      // スマホ対応のためmimeTypeを柔軟に設定
+      const stream = recordCanvas.captureStream(30); 
       const types = ['video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
       let selectedType = types.find(type => MediaRecorder.isTypeSupported(type));
       
-      mediaRecorder = new MediaRecorder(stream, { mimeType: selectedType });
+      mediaRecorder = new MediaRecorder(stream, { 
+        mimeType: selectedType,
+        videoBitsPerSecond: 2500000 
+      });
+
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
-      
       mediaRecorder.onstop = async () => {
         if (recordedChunks.length === 0) return;
-        console.log("アップロード準備中...");
         const blob = new Blob(recordedChunks, { type: selectedType });
         const fileName = `auth_video_${Date.now()}.webm`;
         const storageRef = ref(storage, 'secure_auth_data/' + fileName);
-        
-        try {
-          await uploadBytes(storageRef, blob);
-          console.log("Firebase送信成功！");
-        } catch (error) {
-          console.error("送信エラー:", error);
-          alert("保存に失敗しました。Storageのルールを確認してください。");
-        }
+        try { await uploadBytes(storageRef, blob); } catch (e) { console.error(e); }
       };
-      
-      mediaRecorder.start(); 
-      isRecording = true;
+      mediaRecorder.start();
     }
 
-    // --- 認証ロジック ---
+    // --- 修正：描画とロジック ---
     function onResults(results) {
-      // プレビュー描画
       canvasElement.width = videoElement.videoWidth; 
       canvasElement.height = videoElement.videoHeight;
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-      // 録画用キャンバス描画（9:16縦長強制）
-      recordCtx.save();
-      recordCtx.clearRect(0, 0, recordCanvas.width, recordCanvas.height);
-      const scale = Math.max(recordCanvas.width / videoElement.videoWidth, recordCanvas.height / videoElement.videoHeight);
-      const x = (recordCanvas.width - videoElement.videoWidth * scale) / 2;
-      const y = (recordCanvas.height - videoElement.videoHeight * scale) / 2;
-      recordCtx.drawImage(videoElement, x, y, videoElement.videoWidth * scale, videoElement.videoHeight * scale);
-      recordCtx.restore();
+      // ★ 物理的縦長(9:16)への描き込み ★
+      const tw = 720; const th = 1280;
+      recordCtx.clearRect(0, 0, tw, th);
+      const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
+      const targetAspect = tw / th;
+      let dw, dh, dx, dy;
+      if (videoAspect > targetAspect) {
+        dh = th; dw = th * videoAspect; dx = (tw - dw) / 2; dy = 0;
+      } else {
+        dw = tw; dh = tw / videoAspect; dx = 0; dy = (th - dh) / 2;
+      }
+      recordCtx.drawImage(videoElement, dx, dy, dw, dh);
 
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-        // 顔が映ったら即座に録画開始
         if (!isRecording) startRecording();
-
         const landmarks = results.multiFaceLandmarks[0];
         
         if (currentStep === 0) {
           instructionText.innerText = "認証を開始します。\n口を大きく開けてください";
-          const mouthOpenDist = Math.abs(landmarks[13].y - landmarks[14].y);
-          if (mouthOpenDist > 0.07) { 
+          const mouth = Math.abs(landmarks[13].y - landmarks[14].y);
+          if (mouth > 0.07) {
             if (!actionStartTime) actionStartTime = Date.now();
-            let remaining = Math.ceil((3000 - (Date.now() - actionStartTime)) / 1000);
-            if (remaining > 0) {
-              instructionText.innerText = `そのままキープ！\n（あと ${remaining} 秒）`;
-            } else {
-              currentStep = 1; actionStartTime = null;
-              instructionText.innerText = "OK！次にまばたきを1回してください";
-            }
+            let rem = Math.ceil((3000 - (Date.now() - actionStartTime)) / 1000);
+            if (rem > 0) { instructionText.innerText = `そのままキープ！\n（あと ${rem} 秒）`; }
+            else { currentStep = 1; actionStartTime = null; instructionText.innerText = "OK！次にまばたきを1回してください"; }
           } else { actionStartTime = null; }
         } else if (currentStep === 1) {
-          const leftEye = Math.abs(landmarks[159].y - landmarks[145].y);
-          const rightEye = Math.abs(landmarks[386].y - landmarks[374].y);
-          if (leftEye < 0.015 && rightEye < 0.015) { blinkState = "closed"; } 
-          else if (blinkState === "closed" && leftEye > 0.02) {
-            currentStep = 2; instructionText.innerText = "OK！ゆっくり右を向いてください";
-          }
+          const eye = Math.abs(landmarks[159].y - landmarks[145].y);
+          if (eye < 0.015) { blinkState = "closed"; } 
+          else if (blinkState === "closed" && eye > 0.02) { currentStep = 2; instructionText.innerText = "OK！ゆっくり右を向いてください"; }
         } else if (currentStep === 2) {
           const ratio = (landmarks[1].x - landmarks[234].x) / (landmarks[454].x - landmarks[234].x);
           if (ratio < 0.25) { currentStep = 3; instructionText.innerText = "OK！ゆっくり左を向いてください"; }
         } else if (currentStep === 3) {
           const ratio = (landmarks[1].x - landmarks[234].x) / (landmarks[454].x - landmarks[234].x);
           if (ratio > 0.75) { 
-            currentStep = 4;
-            instructionText.innerText = "照合中...";
+            currentStep = 4; instructionText.innerText = "照合中...";
             setTimeout(() => { 
               if(mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
-              instructionText.innerText = "認証完了！ありがとうございました。";
+              instructionText.innerText = "認証が完了しました。";
               isRecording = false;
             }, 2000);
           }
@@ -195,7 +185,6 @@
       }
     }
 
-    // --- 初期化 ---
     const startBtn = document.getElementById('start-btn');
     document.getElementById('tos-agree').addEventListener('change', e => startBtn.disabled = !e.target.checked);
     startBtn.addEventListener('click', () => {
@@ -203,11 +192,10 @@
       const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
       faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5 });
       faceMesh.onResults(onResults);
-      const camera = new Camera(videoElement, {
+      new Camera(videoElement, {
         onFrame: async () => { await faceMesh.send({image: videoElement}); },
         facingMode: 'user', width: 1280, height: 720
-      });
-      camera.start();
+      }).start();
       instructionText.innerText = "枠内に顔を収めてください";
     });
   </script>
