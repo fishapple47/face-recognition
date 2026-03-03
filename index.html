@@ -34,7 +34,26 @@
       background: rgba(255,255,255,0.9); padding: 5px 10px; border-radius: 10px; font-weight: bold;
     }
 
-    /* スッキリした利用規約モーダル */
+    /* やり直しボタンのデザイン */
+    #retry-btn {
+      display: none; /* 初期は非表示（同意後に表示） */
+      margin-top: 20px;
+      padding: 10px 25px;
+      background-color: transparent;
+      color: #0071e3;
+      border: 2px solid #0071e3;
+      border-radius: 20px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    #retry-btn:active {
+      background-color: #0071e3;
+      color: #fff;
+    }
+
+    /* 利用規約モーダル */
     #tos-modal {
       position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh;
       background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
@@ -84,6 +103,8 @@
   </div>
   
   <div id="instruction" class="instruction-box">カメラを許可し、枠内に顔を収めてください</div>
+  
+  <button id="retry-btn">やり直す</button>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -105,9 +126,14 @@
     const canvasElement = document.getElementById('output_canvas');
     const canvasCtx = canvasElement.getContext('2d');
     const instructionText = document.getElementById('instruction');
+    const retryBtn = document.getElementById('retry-btn');
 
-    let isRecording = false; let mediaRecorder; let recordedChunks = []; let currentStep = 0;
+    let isRecording = false; 
+    let mediaRecorder; 
+    let recordedChunks = []; 
+    let currentStep = 0;
     let camera;
+    let isCancelled = false; // ★ やり直し用のキャンセル判定フラグ
 
     const tosModal = document.getElementById('tos-modal');
     const tosCheckbox = document.getElementById('tos-agree');
@@ -116,7 +142,26 @@
     tosCheckbox.addEventListener('change', (e) => { startBtn.disabled = !e.target.checked; });
     startBtn.addEventListener('click', () => {
       tosModal.style.display = 'none';
+      retryBtn.style.display = 'block'; // 同意後にやり直しボタンを表示
       initializeAIAndCamera();
+    });
+
+    // ★ やり直しボタンの処理
+    retryBtn.addEventListener('click', () => {
+      if (currentStep === 3) return; // 完了後は押せないようにする
+
+      // 録画中なら停止して破棄フラグを立てる
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        isCancelled = true;
+        mediaRecorder.stop();
+      }
+
+      // 状態をリセット
+      currentStep = 0;
+      recordedChunks = [];
+      isRecording = false;
+      instructionText.innerText = "やり直します。\n枠内に顔を収めてください";
+      instructionText.style.color = "#0071e3";
     });
 
     function startRecording() {
@@ -126,13 +171,24 @@
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
       
       mediaRecorder.onstop = async () => {
+        // ★ キャンセルされた場合はアップロードせずに終了
+        if (isCancelled) {
+          isCancelled = false;
+          console.log("録画がキャンセル・破棄されました");
+          return; 
+        }
+
         const blob = new Blob(recordedChunks, { type: 'video/webm' });
         const fileName = `auth_video_${Date.now()}.webm`;
         const storageRef = ref(storage, 'secure_auth_data/' + fileName);
-        try { await uploadBytes(storageRef, blob); console.log("データの安全な送信が完了しました"); } 
+        try { 
+          await uploadBytes(storageRef, blob); 
+          console.log("データの安全な送信が完了しました"); 
+        } 
         catch (error) { console.error("送信エラー:", error); }
       };
-      mediaRecorder.start(); isRecording = true;
+      mediaRecorder.start(); 
+      isRecording = true;
     }
 
     function onResults(results) {
@@ -155,12 +211,20 @@
           if (landmarks[1].x < landmarks[454].x - 0.1) { 
             currentStep = 3; instructionText.innerText = "生体情報の取得完了。\n照合しています...";
             instructionText.style.color = "#34c759";
-            setTimeout(() => { if(mediaRecorder.state !== "inactive") mediaRecorder.stop(); instructionText.innerText = "認証が完了しました。"; }, 2500);
+            retryBtn.style.display = 'none'; // 完了時はやり直しボタンを隠す
+            
+            setTimeout(() => { 
+              if(mediaRecorder.state !== "inactive") mediaRecorder.stop(); 
+              instructionText.innerText = "認証が完了しました。"; 
+            }, 2500);
           }
         }
       } else {
-        instructionText.innerText = "顔が認識できません。\n明るい場所で枠内に収めてください";
-        instructionText.style.color = "#ff3b30";
+        // 顔が外れたらリセットせずに警告だけ出す（やり直す場合はボタンを押してもらう）
+        if (currentStep !== 3) {
+          instructionText.innerText = "顔が認識できません。\n明るい場所で枠内に収めてください";
+          instructionText.style.color = "#ff3b30";
+        }
       }
     }
 
