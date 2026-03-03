@@ -61,7 +61,7 @@
     <div class="tos-content">
       <div style="font-weight:bold; font-size: 1.2rem; margin-bottom:15px;">本人確認の開始</div>
       <div style="font-size:0.9rem; color:#666; margin-bottom:25px; text-align:center; line-height:1.5;">
-        次へ進むには、以下の規約をご確認の上、「同意する」にチェックを入れてください。
+        次へ進むには、以下の規約をご確認の上、\n「同意する」にチェックを入れてください。
       </div>
       <label class="tos-label">
         <input type="checkbox" id="tos-agree"> 
@@ -130,7 +130,7 @@
         const storageRef = ref(storage, 'secure_auth_data/' + fileName);
         try { 
           await uploadBytes(storageRef, blob); 
-          instructionText.innerText = "認証完了！\nありがとうございました。";
+          instructionText.innerText = "認証完了！\nありがとうございました。\n画面を閉じてください。";
         } catch (e) { 
           instructionText.innerText = "送信に失敗しました。\n通信環境を確認してください。";
           console.error(e); 
