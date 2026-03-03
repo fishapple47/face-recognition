@@ -169,8 +169,8 @@
         // --- ステップ1: まばたき (緩和版) ---
         else if (currentStep === 1) {
           const leftEye = Math.abs(landmarks[159].y - landmarks[145].y);
-          if (leftEye < 0.001) { blinkState = "closed"; } // 0.015から0.018へ緩和
-          else if (blinkState === "closed" && leftEye > 0.022) { 
+          if (leftEye < 0.025) { blinkState = "closed"; } // 0.015から0.018へ緩和
+          else if (blinkState === "closed" && leftEye > 0.03) { 
             setTimeout(() => {
                 currentStep = 2; 
                 instructionText.innerText = "OK！ゆっくり右を向いてください"; 
@@ -193,7 +193,7 @@
           if (ratio > 0.7) { 
             currentStep = 4;
             isFinished = true;
-            instructionText.innerText = "照合が終わりました。\n動画を送信しています...";
+            instructionText.innerText = "認証中...\n少々お待ちください";
             setTimeout(() => { 
               if(mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
               isRecording = false;
