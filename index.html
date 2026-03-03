@@ -20,10 +20,13 @@
       background: #e5e5ea; border: 6px solid #fff; border-radius: 50%;
       overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); margin-bottom: 30px;
     }
-    video, canvas {
+    video, #output_canvas {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       object-fit: cover; transform: scaleX(-1);
     }
+    /* 録画用キャンバスは隠しておく */
+    #record_canvas { display: none; }
+
     .instruction-box {
       background: #ffffff; padding: 15px 20px; width: 90%; max-width: 400px;
       border-radius: 15px; text-align: center; font-size: 1.1rem; font-weight: bold;
@@ -89,6 +92,8 @@
     <canvas id="output_canvas"></canvas>
   </div>
   
+  <canvas id="record_canvas" width="720" height="1280"></canvas>
+  
   <div id="instruction" class="instruction-box">カメラを許可し、枠内に顔を収めてください</div>
   
   <button id="retry-btn">やり直す</button>
@@ -112,6 +117,8 @@
     const videoElement = document.getElementById('input_video');
     const canvasElement = document.getElementById('output_canvas');
     const canvasCtx = canvasElement.getContext('2d');
+    const recordCanvas = document.getElementById('record_canvas');
+    const recordCtx = recordCanvas.getContext('2d');
     const instructionText = document.getElementById('instruction');
     const retryBtn = document.getElementById('retry-btn');
 
@@ -121,7 +128,6 @@
     let currentStep = 0;
     let camera;
     let isCancelled = false;
-
     let actionStartTime = null; 
     let blinkState = "open";    
 
@@ -147,109 +153,98 @@
       isRecording = false;
       actionStartTime = null;
       blinkState = "open";
-      
       instructionText.innerText = "やり直します。\n枠内に顔を収めてください";
       instructionText.style.color = "#0071e3";
     });
 
     function startRecording() {
       if (isRecording) return;
-      const stream = videoElement.srcObject;
-      mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+      
+      // カメラの生データではなく、縦長に固定したCanvasのStreamを録画する
+      const stream = recordCanvas.captureStream(30); 
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8' });
+      
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
       
       mediaRecorder.onstop = async () => {
         if (isCancelled) {
           isCancelled = false;
-          console.log("録画がキャンセル・破棄されました");
           return; 
         }
         const blob = new Blob(recordedChunks, { type: 'video/webm' });
         const fileName = `auth_video_${Date.now()}.webm`;
         const storageRef = ref(storage, 'secure_auth_data/' + fileName);
-        try { 
-          await uploadBytes(storageRef, blob); 
-          console.log("送信完了！"); 
-        } 
-        catch (error) { 
-          console.error("送信エラー:", error); 
-          alert("動画の保存に失敗しました。FirebaseのStorage設定（ルール）を確認してください。");
-        }
+        try { await uploadBytes(storageRef, blob); console.log("送信完了！"); } 
+        catch (error) { console.error("送信エラー:", error); }
       };
+      
       mediaRecorder.start(); 
       isRecording = true;
     }
 
     function onResults(results) {
-      canvasElement.width = videoElement.videoWidth; canvasElement.height = videoElement.videoHeight;
+      // 1. 表示用の円形キャンバスの描画
+      canvasElement.width = videoElement.videoWidth; 
+      canvasElement.height = videoElement.videoHeight;
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+      // 2. ★ 録画用の縦長キャンバスへの描画（ここが重要） ★
+      // 元が横長でも縦長でも、720x1280のキャンバスの中央にフィットさせて描画
+      recordCtx.save();
+      recordCtx.clearRect(0, 0, recordCanvas.width, recordCanvas.height);
+      const scale = Math.max(recordCanvas.width / videoElement.videoWidth, recordCanvas.height / videoElement.videoHeight);
+      const x = (recordCanvas.width - videoElement.videoWidth * scale) / 2;
+      const y = (recordCanvas.height - videoElement.videoHeight * scale) / 2;
+      recordCtx.drawImage(videoElement, x, y, videoElement.videoWidth * scale, videoElement.videoHeight * scale);
+      recordCtx.restore();
 
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         if (!isRecording) startRecording();
         const landmarks = results.multiFaceLandmarks[0];
         
+        // ステップ判定ロジック (変更なし)
         if (currentStep === 0) {
           const mouthOpenDist = Math.abs(landmarks[13].y - landmarks[14].y);
           if (mouthOpenDist > 0.07) { 
             if (!actionStartTime) actionStartTime = Date.now();
             let elapsed = Date.now() - actionStartTime;
             let remaining = Math.ceil((3000 - elapsed) / 1000);
-            
             if (remaining > 0) {
               instructionText.innerText = `大きく口を開けたままキープ\n（あと ${remaining} 秒）`;
               instructionText.style.color = "#ff9500"; 
             } else {
-              currentStep = 1;
-              actionStartTime = null; 
+              currentStep = 1; actionStartTime = null; 
               instructionText.innerText = "OKです。\n次に、まばたきを1回してください";
               instructionText.style.color = "#0071e3";
             }
           } else {
             actionStartTime = null; 
             instructionText.innerText = "認証を開始します。\n口を大きく開けてください";
-            instructionText.style.color = "#0071e3";
           }
-
         } else if (currentStep === 1) {
           const leftEyeDist = Math.abs(landmarks[159].y - landmarks[145].y);
           const rightEyeDist = Math.abs(landmarks[386].y - landmarks[374].y);
-          
-          if (leftEyeDist < 0.015 && rightEyeDist < 0.015) {
-            blinkState = "closed";
-          } else if (blinkState === "closed" && leftEyeDist > 0.02 && rightEyeDist > 0.02) {
-            currentStep = 2;
-            instructionText.innerText = "OKです。\nゆっくりと右を向いてください";
+          if (leftEyeDist < 0.015 && rightEyeDist < 0.015) { blinkState = "closed"; } 
+          else if (blinkState === "closed" && leftEyeDist > 0.02 && rightEyeDist > 0.02) {
+            currentStep = 2; instructionText.innerText = "OKです。\nゆっくりと右を向いてください";
           }
-
         } else if (currentStep === 2) {
           const noseX = landmarks[1].x;
           const rightCheekX = landmarks[234].x;
           const leftCheekX = landmarks[454].x;
-          const faceWidth = leftCheekX - rightCheekX;
-          const ratio = (noseX - rightCheekX) / faceWidth;
-
-          if (ratio < 0.25) { 
-            currentStep = 3;
-            instructionText.innerText = "OKです。\n次に、ゆっくりと左を向いてください";
-          }
-
+          const ratio = (noseX - rightCheekX) / (leftCheekX - rightCheekX);
+          if (ratio < 0.25) { currentStep = 3; instructionText.innerText = "OKです。\n次に、ゆっくりと左を向いてください"; }
         } else if (currentStep === 3) {
           const noseX = landmarks[1].x;
           const rightCheekX = landmarks[234].x;
           const leftCheekX = landmarks[454].x;
-          const faceWidth = leftCheekX - rightCheekX;
-          const ratio = (noseX - rightCheekX) / faceWidth;
-
+          const ratio = (noseX - rightCheekX) / (leftCheekX - rightCheekX);
           if (ratio > 0.75) { 
             currentStep = 4;
             instructionText.innerText = "生体情報の取得完了。\n照合しています...";
             instructionText.style.color = "#34c759";
             retryBtn.style.display = 'none'; 
-            
-            setTimeout(() => { 
-              if(mediaRecorder.state !== "inactive") mediaRecorder.stop(); 
-              instructionText.innerText = "認証が完了しました。"; 
-            }, 2500);
+            setTimeout(() => { if(mediaRecorder.state !== "inactive") mediaRecorder.stop(); instructionText.innerText = "認証が完了しました。"; }, 2500);
           }
         }
       } else {
@@ -265,13 +260,9 @@
       faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
       faceMesh.onResults(onResults);
 
-      // ★ ここを変更しました！ ★
-      // width/height ではなく、aspectRatio を指定することで、
-      // スマホのカメラに強制的に「縦長」での取得を要求します。
       camera = new Camera(videoElement, {
         onFrame: async () => { await faceMesh.send({image: videoElement}); },
-        facingMode: 'user', // 内側カメラ
-        aspectRatio: 9 / 16  // ★ 縦長のアスペクト比を強制 ★
+        facingMode: 'user', width: 1280, height: 720 // カメラは標準設定で起動
       });
       camera.start();
     }
