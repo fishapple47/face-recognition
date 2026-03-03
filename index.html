@@ -159,7 +159,7 @@
         if (currentStep === 0) {
           instructionText.innerText = "口をゆっくり大きく開けてください";
           const mouthOpenDist = Math.abs(landmarks[13].y - landmarks[14].y);
-          if (mouthOpenDist > 0.1) { // 0.07から0.05へ緩和
+          if (mouthOpenDist > 0.02) { // 0.07から0.05へ緩和
             if (!actionStartTime) actionStartTime = Date.now();
             let remaining = Math.ceil((2000 - (Date.now() - actionStartTime)) / 1000); // 3秒から2秒へ短縮
             if (remaining > 0) { instructionText.innerText = `そのままキープ...\n(${remaining})`; }
