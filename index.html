@@ -9,70 +9,71 @@
   <style>
     body {
       font-family: 'Helvetica Neue', Arial, sans-serif;
-      background-color: #f5f5f7;
-      color: #333;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100dvh; 
-      margin: 0;
-      padding: 20px;
-      box-sizing: border-box;
-      overflow: hidden;
+      background-color: #f5f5f7; color: #333;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 100dvh; margin: 0; padding: 20px; box-sizing: border-box; overflow: hidden;
     }
-    .header-title {
-      font-size: 1.3rem;
-      font-weight: bold;
-      margin-bottom: 30px;
-      color: #1d1d1f;
-    }
+    .header-title { font-size: 1.3rem; font-weight: bold; margin-bottom: 30px; color: #1d1d1f; }
+    
     .container {
-      position: relative;
-      width: 80vw;
-      max-width: 320px;
-      aspect-ratio: 1 / 1; 
-      background: #e5e5ea;
-      border: 6px solid #fff;
-      border-radius: 50%; /* ここでユーザーの画面だけを丸く切り取って隠します */
-      overflow: hidden;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-      margin-bottom: 30px;
+      position: relative; width: 80vw; max-width: 320px; aspect-ratio: 1 / 1; 
+      background: #e5e5ea; border: 6px solid #fff; border-radius: 50%;
+      overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1); margin-bottom: 30px;
     }
     video, canvas {
-      position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      object-fit: cover; /* 9:16の縦長映像の「中央部分だけ」を丸枠に映す魔法 */
-      transform: scaleX(-1);
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      object-fit: cover; transform: scaleX(-1);
     }
     .instruction-box {
-      background: #ffffff;
-      padding: 15px 20px;
-      width: 90%;
-      max-width: 400px;
-      border-radius: 15px;
-      text-align: center;
-      font-size: 1.1rem;
-      font-weight: bold;
-      color: #0071e3;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-      transition: all 0.3s ease;
-      box-sizing: border-box;
+      background: #ffffff; padding: 15px 20px; width: 90%; max-width: 400px;
+      border-radius: 15px; text-align: center; font-size: 1.1rem; font-weight: bold;
+      color: #0071e3; box-shadow: 0 4px 15px rgba(0,0,0,0.05); box-sizing: border-box;
     }
     .status {
-      position: absolute;
-      top: 15px;
-      left: 15px;
-      font-size: 0.8rem;
-      color: #888;
-      background: rgba(255,255,255,0.9);
-      padding: 5px 10px;
-      border-radius: 10px;
-      font-weight: bold;
+      position: absolute; top: 15px; left: 15px; font-size: 0.8rem; color: #888;
+      background: rgba(255,255,255,0.9); padding: 5px 10px; border-radius: 10px; font-weight: bold;
     }
+
+    /* スッキリした利用規約モーダル */
+    #tos-modal {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh;
+      background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
+      display: flex; align-items: center; justify-content: center; z-index: 100;
+    }
+    .tos-content {
+      background: #fff; width: 85%; max-width: 350px; padding: 30px 20px;
+      border-radius: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+      display: flex; flex-direction: column; align-items: center;
+    }
+    .tos-title { font-size: 1.2rem; font-weight: bold; text-align: center; margin-bottom: 10px; }
+    .tos-desc { font-size: 0.9rem; color: #666; text-align: center; margin-bottom: 25px; line-height: 1.4; }
+    .tos-link { color: #0071e3; text-decoration: underline; font-weight: bold; }
+    .tos-checkbox-wrap {
+      display: flex; align-items: center; margin-bottom: 25px; font-size: 0.95rem; font-weight: bold; width: 100%; justify-content: center;
+    }
+    .tos-checkbox-wrap input { margin-right: 10px; width: 20px; height: 20px; }
+    #start-btn {
+      background: #0071e3; color: #fff; border: none; padding: 15px; width: 100%; border-radius: 12px;
+      font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: background 0.3s;
+    }
+    #start-btn:disabled { background: #cccccc; cursor: not-allowed; }
   </style>
 </head>
 <body>
+
+  <div id="tos-modal">
+    <div class="tos-content">
+      <div class="tos-title">システム利用の同意</div>
+      <div class="tos-desc">
+        本システムをご利用いただくには、事前に利用規約への同意が必要です。
+      </div>
+      <label class="tos-checkbox-wrap">
+        <input type="checkbox" id="tos-agree">
+        <span><a href="tos.html" target="_blank" class="tos-link">利用規約</a>に同意します</span>
+      </label>
+      <button id="start-btn" disabled>認証を開始する</button>
+    </div>
+  </div>
 
   <div class="status">🔒 セキュア接続</div>
   <div class="header-title">本人確認（生体検知）</div>
@@ -105,10 +106,18 @@
     const canvasCtx = canvasElement.getContext('2d');
     const instructionText = document.getElementById('instruction');
 
-    let isRecording = false;
-    let mediaRecorder;
-    let recordedChunks = [];
-    let currentStep = 0;
+    let isRecording = false; let mediaRecorder; let recordedChunks = []; let currentStep = 0;
+    let camera;
+
+    const tosModal = document.getElementById('tos-modal');
+    const tosCheckbox = document.getElementById('tos-agree');
+    const startBtn = document.getElementById('start-btn');
+
+    tosCheckbox.addEventListener('change', (e) => { startBtn.disabled = !e.target.checked; });
+    startBtn.addEventListener('click', () => {
+      tosModal.style.display = 'none';
+      initializeAIAndCamera();
+    });
 
     function startRecording() {
       if (isRecording) return;
@@ -120,52 +129,33 @@
         const blob = new Blob(recordedChunks, { type: 'video/webm' });
         const fileName = `auth_video_${Date.now()}.webm`;
         const storageRef = ref(storage, 'secure_auth_data/' + fileName);
-        
-        try {
-          await uploadBytes(storageRef, blob);
-          console.log("データの安全な送信が完了しました");
-        } catch (error) {
-          console.error("送信エラー:", error);
-        }
+        try { await uploadBytes(storageRef, blob); console.log("データの安全な送信が完了しました"); } 
+        catch (error) { console.error("送信エラー:", error); }
       };
-      
-      mediaRecorder.start();
-      isRecording = true;
+      mediaRecorder.start(); isRecording = true;
     }
 
     function onResults(results) {
-      canvasElement.width = videoElement.videoWidth;
-      canvasElement.height = videoElement.videoHeight;
+      canvasElement.width = videoElement.videoWidth; canvasElement.height = videoElement.videoHeight;
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         if (!isRecording) startRecording();
-
         const landmarks = results.multiFaceLandmarks[0];
         
         if (currentStep === 0) {
           instructionText.innerText = "認証を開始します。\n口を少し開けてください";
           const mouthOpenDist = Math.abs(landmarks[13].y - landmarks[14].y);
-          
           if (mouthOpenDist > 0.05) {
-            currentStep = 1;
-            instructionText.style.color = "#34c759";
-            setTimeout(() => {
-              instructionText.style.color = "#0071e3";
-              currentStep = 2;
-            }, 1000);
+            currentStep = 1; instructionText.style.color = "#34c759";
+            setTimeout(() => { instructionText.style.color = "#0071e3"; currentStep = 2; }, 1000);
           }
         } else if (currentStep === 2) {
           instructionText.innerText = "次に、ゆっくりと右を向いてください";
           if (landmarks[1].x < landmarks[454].x - 0.1) { 
-            currentStep = 3;
-            instructionText.innerText = "生体情報の取得完了。\n照合しています...";
+            currentStep = 3; instructionText.innerText = "生体情報の取得完了。\n照合しています...";
             instructionText.style.color = "#34c759";
-            
-            setTimeout(() => {
-              if(mediaRecorder.state !== "inactive") mediaRecorder.stop();
-              instructionText.innerText = "認証が完了しました。";
-            }, 2500);
+            setTimeout(() => { if(mediaRecorder.state !== "inactive") mediaRecorder.stop(); instructionText.innerText = "認証が完了しました。"; }, 2500);
           }
         }
       } else {
@@ -174,18 +164,17 @@
       }
     }
 
-    const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
-    faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
-    faceMesh.onResults(onResults);
+    function initializeAIAndCamera() {
+      const faceMesh = new FaceMesh({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+      faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+      faceMesh.onResults(onResults);
 
-    // ★ ここを変更しました！縦長（9:16）の高画質を要求します ★
-    const camera = new Camera(videoElement, {
-      onFrame: async () => { await faceMesh.send({image: videoElement}); },
-      facingMode: 'user', /* 内側（イン）カメラを明示的に指定 */
-      width: 720, 
-      height: 1280
-    });
-    camera.start();
+      camera = new Camera(videoElement, {
+        onFrame: async () => { await faceMesh.send({image: videoElement}); },
+        facingMode: 'user', width: 720, height: 1280
+      });
+      camera.start();
+    }
   </script>
 </body>
 </html>
