@@ -166,24 +166,38 @@
             else { currentStep = 1; actionStartTime = null; instructionText.innerText = "OK！次にゆっくりまばたきしてください"; }
           } else { actionStartTime = null; }
         } 
-// --- ステップ1: まばたき (超・激甘設定) ---
-        else if (currentStep === 1) {
-          const leftEye = Math.abs(landmarks[159].y - landmarks[145].y);
-          const rightEye = Math.abs(landmarks[386].y - landmarks[374].y);
-          
-          // 数値を 0.025 → 0.035 に引き上げ (半目でも「閉じた」とみなす)
-          // 片目でも反応するように設定を緩和
-          if (leftEye < 0.035 || rightEye < 0.035) { 
-            blinkState = "closed"; 
-          } 
-          // 一度「閉じた」と判定された後、少しでも目が開けば合格
-          else if (blinkState === "closed" && (leftEye > 0.038 || rightEye > 0.038)) { 
-            setTimeout(() => {
-                currentStep = 2; 
-                instructionText.innerText = "OK！ゆっくり右を向いてください"; 
-            }, 300);
-          }
-        } 
+// --- ステップ1: まばたき (ロジック再構築版) ---
+    else if (currentStep === 1) {
+      // 左右両方のまばたきを監視
+      const leftEyeScore = Math.abs(landmarks[159].y - landmarks[145].y);
+      const rightEyeScore = Math.abs(landmarks[386].y - landmarks[374].y);
+      
+      // デバッグ用にコンソールで数値を確認できるようにしておきます
+      // console.log("Eye Score:", leftEyeScore); 
+
+      // 1. 「閉じ」判定：0.015以下（かなりしっかり閉じた状態を捉える）
+      if (leftEyeScore < 0.015 || rightEyeScore < 0.015) {
+        if (blinkState === "open") {
+          blinkState = "closed";
+          console.log("まばたき検知: 閉じ");
+        }
+      } 
+      
+      // 2. 「開き」判定：一度閉じたあと、0.02以上まで開いたら合格
+      if (blinkState === "closed" && (leftEyeScore > 0.022 || rightEyeScore > 0.022)) {
+        console.log("まばたき検知: 合格");
+        currentStep = 2;
+        instructionText.innerText = "OK！次にゆっくり右を向いてください";
+        blinkState = "finished"; // 二重カウント防止
+      }
+      
+      // 補足：もし画面上でずっと「まばたきしてください」から動かない場合、
+      // ユーザーに「強く目を閉じてください」と伝える演出を加えます
+      if (!actionStartTime) actionStartTime = Date.now();
+      if (Date.now() - actionStartTime > 5000) {
+          instructionText.innerText = "ゆっくり、強く目を閉じてから\nパッと開けてみてください";
+      }
+    }
         // --- ステップ2: 右向き ---
         else if (currentStep === 2) {
           const ratio = (landmarks[1].x - landmarks[234].x) / (landmarks[454].x - landmarks[234].x);
