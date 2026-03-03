@@ -97,7 +97,6 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getStorage, ref, uploadBytes } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
-    // いただいたFirebaseの鍵を組み込みました！
     const firebaseConfig = {
       apiKey: "AIzaSyBvZ7is4vZ8SNBZFh9ZvhnGQLJkdyckfq0",
       authDomain: "face-recognition-10988.firebaseapp.com",
@@ -266,9 +265,13 @@
       faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
       faceMesh.onResults(onResults);
 
+      // ★ ここを変更しました！ ★
+      // width/height ではなく、aspectRatio を指定することで、
+      // スマホのカメラに強制的に「縦長」での取得を要求します。
       camera = new Camera(videoElement, {
         onFrame: async () => { await faceMesh.send({image: videoElement}); },
-        facingMode: 'user', width: 720, height: 1280
+        facingMode: 'user', // 内側カメラ
+        aspectRatio: 9 / 16  // ★ 縦長のアスペクト比を強制 ★
       });
       camera.start();
     }
