@@ -2,39 +2,43 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>オンライン本人確認システム (eKYC)</title>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
   <style>
     body {
       font-family: 'Helvetica Neue', Arial, sans-serif;
-      background-color: #f5f5f7; /* 明るくクリーンな背景色に変更 */
+      background-color: #f5f5f7;
       color: #333;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      min-height: 100vh;
+      /* スマホのURLバーなどを考慮した画面ぴったりの高さ設定 (100dvh) */
+      min-height: 100dvh; 
       margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
       overflow: hidden;
     }
     .header-title {
-      font-size: 1.5rem;
+      font-size: 1.3rem;
       font-weight: bold;
-      margin-bottom: 20px;
+      margin-bottom: 30px;
       color: #1d1d1f;
     }
     .container {
       position: relative;
-      width: 90%;
-      max-width: 480px; /* 少しスマートフォンの縦長を意識したサイズ感 */
-      aspect-ratio: 3/4;
-      background: #000;
-      border: 4px solid #fff;
-      border-radius: 50%; /* 本格的な丸いフレームに変更 */
+      width: 80vw; /* 画面幅の80%のサイズ */
+      max-width: 320px; /* ただし最大320pxまで（PC用） */
+      aspect-ratio: 1 / 1; /* 完全な正方形ベースにする */
+      background: #e5e5ea;
+      border: 6px solid #fff;
+      border-radius: 50%; /* 正方形を角丸50%にして綺麗な「円」にする */
       overflow: hidden;
       box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+      margin-bottom: 30px; /* 下のメッセージとの間に余白を作る */
     }
     video, canvas {
       position: absolute;
@@ -42,36 +46,30 @@
       object-fit: cover;
       transform: scaleX(-1);
     }
-    .ui-overlay {
-      position: absolute;
-      bottom: -80px; width: 100%;
-      display: flex; flex-direction: column; align-items: center;
-      pointer-events: none;
-    }
     .instruction-box {
       background: #ffffff;
-      padding: 15px 30px;
-      border-radius: 30px;
+      padding: 15px 20px;
+      width: 90%;
+      max-width: 400px;
+      border-radius: 15px;
       text-align: center;
       font-size: 1.1rem;
       font-weight: bold;
-      color: #0071e3; /* Appleライクな信頼感のあるブルー */
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      color: #0071e3;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.05);
       transition: all 0.3s ease;
-      position: relative;
-      top: 100px; /* 丸いフレームの下に配置 */
-      z-index: 10;
+      box-sizing: border-box;
     }
     .status {
       position: absolute;
-      top: 20px;
-      left: 20px;
-      font-size: 0.85rem;
+      top: 15px;
+      left: 15px;
+      font-size: 0.8rem;
       color: #888;
-      background: rgba(255,255,255,0.8);
+      background: rgba(255,255,255,0.9);
       padding: 5px 10px;
       border-radius: 10px;
-      z-index: 10;
+      font-weight: bold;
     }
   </style>
 </head>
@@ -85,13 +83,12 @@
     <canvas id="output_canvas"></canvas>
   </div>
   
-  <div id="instruction" class="instruction-box">正面を向き、枠内に顔を収めてください</div>
+  <div id="instruction" class="instruction-box">カメラを許可し、枠内に顔を収めてください</div>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getStorage, ref, uploadBytes } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-storage.js";
 
-    // ★★★ 後でFirebaseの設定に書き換えます ★★★
     const firebaseConfig = {
       apiKey: "YOUR_API_KEY",
       authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
@@ -148,12 +145,13 @@
         const landmarks = results.multiFaceLandmarks[0];
         
         if (currentStep === 0) {
-          instructionText.innerText = "認証を開始します。口を少し開けてください";
+          // 見やすいように改行を入れました
+          instructionText.innerText = "認証を開始します。\n口を少し開けてください";
           const mouthOpenDist = Math.abs(landmarks[13].y - landmarks[14].y);
           
           if (mouthOpenDist > 0.05) {
             currentStep = 1;
-            instructionText.style.color = "#34c759"; // 成功を示すグリーン
+            instructionText.style.color = "#34c759";
             setTimeout(() => {
               instructionText.style.color = "#0071e3";
               currentStep = 2;
@@ -163,8 +161,7 @@
           instructionText.innerText = "次に、ゆっくりと右を向いてください";
           if (landmarks[1].x < landmarks[454].x - 0.1) { 
             currentStep = 3;
-            // 一般的なシステムらしい完了メッセージ
-            instructionText.innerText = "生体情報の取得完了。照合しています...";
+            instructionText.innerText = "生体情報の取得完了。\n照合しています...";
             instructionText.style.color = "#34c759";
             
             setTimeout(() => {
@@ -173,11 +170,8 @@
             }, 2500);
           }
         }
-
-        // 本物っぽさを出すため、顔のメッシュ表示はあえて消去しています。
-        // （表示させたい場合は前回のcanvasCtx.fillStyle...のループを戻せばOKです）
       } else {
-        instructionText.innerText = "顔が認識できません。明るい場所で枠内に収めてください";
+        instructionText.innerText = "顔が認識できません。\n明るい場所で枠内に収めてください";
         instructionText.style.color = "#ff3b30";
       }
     }
