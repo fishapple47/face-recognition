@@ -101,23 +101,32 @@
     let actionStartTime = null; 
     let blinkState = "open";
 
-    // --- 録画開始関数 ---
+    // --- 録画開始関数 (最新版に差し替え) ---
     function startRecording() {
       if (isRecording) return;
       console.log("録画を開始します...");
       recordedChunks = [];
+      
+      // ★ 修正ポイント: 録画用キャンバスのサイズをここで再度「縦長」に明示
+      recordCanvas.width = 720;
+      recordCanvas.height = 1280;
+
+      // キャンバスからストリームを取得
       const stream = recordCanvas.captureStream(30); 
       
-      // スマホ対応のためmimeTypeを柔軟に設定
       const types = ['video/webm;codecs=vp8', 'video/webm', 'video/mp4'];
       let selectedType = types.find(type => MediaRecorder.isTypeSupported(type));
       
-      mediaRecorder = new MediaRecorder(stream, { mimeType: selectedType });
+      // ★ 修正ポイント: ビットレートを指定して縦長の解像度を維持しやすくする
+      mediaRecorder = new MediaRecorder(stream, { 
+        mimeType: selectedType,
+        videoBitsPerSecond: 2500000 // 2.5Mbps
+      });
+      
       mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
       
       mediaRecorder.onstop = async () => {
         if (recordedChunks.length === 0) return;
-        console.log("アップロード準備中...");
         const blob = new Blob(recordedChunks, { type: selectedType });
         const fileName = `auth_video_${Date.now()}.webm`;
         const storageRef = ref(storage, 'secure_auth_data/' + fileName);
@@ -127,7 +136,6 @@
           console.log("Firebase送信成功！");
         } catch (error) {
           console.error("送信エラー:", error);
-          alert("保存に失敗しました。Storageのルールを確認してください。");
         }
       };
       
@@ -135,21 +143,35 @@
       isRecording = true;
     }
 
-    // --- 認証ロジック ---
+    // --- 認証ロジック (最新版描画処理に差し替え) ---
     function onResults(results) {
-      // プレビュー描画
       canvasElement.width = videoElement.videoWidth; 
       canvasElement.height = videoElement.videoHeight;
       canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
 
-      // 録画用キャンバス描画（9:16縦長強制）
-      recordCtx.save();
-      recordCtx.clearRect(0, 0, recordCanvas.width, recordCanvas.height);
-      const scale = Math.max(recordCanvas.width / videoElement.videoWidth, recordCanvas.height / videoElement.videoHeight);
-      const x = (recordCanvas.width - videoElement.videoWidth * scale) / 2;
-      const y = (recordCanvas.height - videoElement.videoHeight * scale) / 2;
-      recordCtx.drawImage(videoElement, x, y, videoElement.videoWidth * scale, videoElement.videoHeight * scale);
-      recordCtx.restore();
+      // ★ 修正ポイント: 描画計算をより厳密に
+      const targetW = 720;
+      const targetH = 1280;
+      recordCtx.clearRect(0, 0, targetW, targetH);
+      
+      // カメラ映像を「縦長」の枠に合わせて中央切り抜き（Cover）描画
+      const videoAspect = videoElement.videoWidth / videoElement.videoHeight;
+      const targetAspect = targetW / targetH;
+      let drawW, drawH, drawX, drawY;
+
+      if (videoAspect > targetAspect) {
+        drawH = targetH;
+        drawW = targetH * videoAspect;
+        drawX = (targetW - drawW) / 2;
+        drawY = 0;
+      } else {
+        drawW = targetW;
+        drawH = targetW / videoAspect;
+        drawX = 0;
+        drawY = (targetH - drawH) / 2;
+      }
+
+      recordCtx.drawImage(videoElement, drawX, drawY, drawW, drawH);
 
       if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
         // 顔が映ったら即座に録画開始
